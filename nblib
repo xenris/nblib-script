@@ -2,36 +2,42 @@
 
 # TODO Create a different name for this script.
 
+# TODO Move avrdude file in nblib-template-project to avrtools
+
 # Script for creating, compiling, and managing nblib based projects.
 
 set -e
 
 versionId="0.1"
 
-helpMessage="\
-Available commands:
-    create <name> -> Creates a new project with the given name.
-    build -> Compile the code.
-    clean -> Delete output files, such as objects and binarys.
-    upload -> Compile the code and write it to a connected microcontroller.
-    memory -> Show the memory use in the microcontroller.
-    update -> Update the nblib library in the current project.
-    serial [port] -> Open a terminal to a serial port. Will guess the port if not given.
-    version -> Show the script version.
-    help -> Show this help message
-$0 version $versionId"
+function showHelp() {
+    echo "Available commands:"
+    echo "    create <name> -> Creates a new project with the given name."
+    echo "    build         -> Compile the code."
+    echo "    clean         -> Delete output files, such as objects and binarys."
+    echo "    upload [port] -> Compile the code and write it to a connected microcontroller. Will guess the port if not provided."
+    echo "    update        -> Update the nblib library in the current project."
+    echo "    serial [port] -> Open a terminal to a serial port. Will guess the port if not provided."
+    echo "    version       -> Show the script version."
+    echo "    help          -> Show this help message"
+    echo "nblib (version $versionId)"
+}
 
-arch="avr" # TODO Get from config script.
+if [[ -e lib/nblib/ ]]; then
+    source ./build.config
+fi
 
-elf="gen/firmware.elf"
+if [[ -n $avrtools ]]; then
+    export PATH="$PATH:$avrtools/usr/local/bin/"
+fi
 
-if [[ "$#" == "0" ]]; then
-    echo "$helpMessage"
+if [[ $# == 0 ]]; then
+    showHelp
     exit
 fi
 
 function checkForProject() {
-    if [[ ! -e ".nblib_project" ]]; then
+    if [[ ! -e lib/nblib/ ]]; then
         echo "Error: Not an nblib project"
         exit -1
     fi
@@ -42,9 +48,7 @@ function showVersion() {
 }
 
 function createProject() {
-    # dir=$1
-    # dir=${dir//<}
-    # dir=${dir//>}
+    # TODO Check that project name is valid.
 
     if [[ -z $1 ]]; then
         echo "Error: No project name given. See '$0 --help'"
@@ -73,7 +77,7 @@ function createProject() {
 
         git init
 
-        # TODO Remove /lib/nblib from project template.
+        rmdir lib/nblib/
 
         git submodule add https://github.com/xenris/nblib.git lib/nblib
 
@@ -84,24 +88,10 @@ function createProject() {
     fi
 }
 
-function showMemoryUse() {
-    checkForProject
-
-    case $arch in
-    avr)
-        avr-objdump -Pmem-usage $elf | tail -n +3 | head -n -2
-        echo "----------------"
-        ;;
-    arm)
-        arm-none-eabi-size $elf
-        ;;
-    esac
-}
-
 function buildProject() {
     checkForProject
 
-    source ./build.config
+    elf="gen/firmware.elf"
 
     if [[ "$mcu" =~ ^at.* ]]; then
         arch="avr"
@@ -114,32 +104,50 @@ function buildProject() {
         exit -1
     fi
 
-    # TODO generate extra files. e.g. .clang_complete (Although, maybe this could be built in to the Tupfile?)
-
-    echo "-I./lib/nblib/src" > .clang_complete
-    echo "-ffreestanding" >> .clang_complete
+    echo "-ffreestanding" > .clang_complete
     echo "-Dexternally_visible=used" >> .clang_complete
     echo "-Dsignal=used" >> .clang_complete
     echo "-D__${mcu}__" >> .clang_complete
     echo "-std=c++20" >> .clang_complete
 
-    PATHS=$(find src/ lib/*/src/ -name '*.c' -o -name '*.cpp' -o -name '*.S')
+    for p in $(ls lib); do
+        echo "-Ilib/$p/src/" >> .clang_complete
+    done
 
-    # rm -f Tupresources
+    PATHS=$(find src/ lib/*/src/ -name '*.c' -o -name '*.cpp' -o -name '*.S')
 
     echo "arch = $arch" > Tupresources
     echo "mmcu = $mmcu" >> Tupresources
     echo "CFLAGS += -D__${mcu}__" >> Tupresources
 
+    for p in $(ls lib); do
+        echo "CFLAGS += -Ilib/$p/src/" >> Tupresources
+    done
+
     for p in $PATHS; do
         echo "SRC_FILES += $p" >> Tupresources
     done
 
+    echo "-----------------------------------"
+    echo "Building"
+    echo "-----------------------------------"
+
     tup
 
-    echo ""
+    rm Tupresources
 
-    showMemoryUse
+    case $arch in
+    avr )
+        echo "-----------------------------------"
+        echo "AVR Memory Usage"
+        echo "-----------------------------------"
+
+        avr-objdump -Pmem-usage $elf | tail -n +5 | head -n -2
+        ;;
+    arm )
+        arm-none-eabi-size $elf
+        ;;
+    esac
 }
 
 function cleanProject() {
@@ -161,46 +169,100 @@ function cleanProject() {
     fi
 }
 
+# TODO This might actually be a bad idea, as sending data to a random port may not be good.
+# Think about removing this...?
+function findPort() {
+    echo $(ls -d /dev/* | grep -E 'tty(ACM|USB)' | head -n 1)
+}
+
+function uploadAvrProject() {
+    checkForProject
+
+    hex="gen/firmware.hex"
+
+    case $programmer in
+    usbasp )
+        port="usb"
+        ;;
+    * )
+        port=$1
+
+        if [[ -z $port ]]; then port=$upload_port; fi
+
+        if [[ -z $port ]]; then port=$(findPort); fi
+
+        if [[ -z $port ]]; then
+            echo "Error: Can't find upload port."
+            exit -1
+        fi
+        ;;
+    esac
+
+    if [[ "$programmer" == "updi" ]]; then
+        # TODO
+        echo pyupdi.py -d $mmcu -c $upload_port [-e] [-b $upload_baud] [-f FLASH] [-r] [-i] [-fs [FUSES [FUSES ...]]] [-fr] [-v]
+    else
+        if [[ -n $disableAutoErase ]]; then disableAutoErase='-D'; fi
+
+        if [[ -n $upload_baud ]]; then upload_baud="-b $upload_baud"; fi
+
+        if [[ -n $bitclock ]]; then bitclock="-B $bitclock"; fi
+
+        avrdude $bitclock $upload_baud -p $mmcu -P $port -c $programmer $disableAutoErase -U flash:w:$hex
+    fi
+}
+
+function uploadArmProject() {
+    # TODO Check if address needs to change in some cases.
+    st-flash --reset write $bin 0x08000000
+}
+
 function uploadProject() {
     buildProject
 
-    echo ""
+    echo "-----------------------------------"
+    echo "Uploading"
+    echo "-----------------------------------"
 
-    port=$1
-
-    if [[ -z $port ]]; then
-        port=$(ls /dev/ | grep -E 'tty(ACM|USB)' | head -n 1)
-
-        if [[ -z $port ]]; then
-            echo "Error: Can't find upload port"
-            exit -1
-        fi
-    fi
-
-    echo "upload to $port"
-
-    # TODO Check what type of programmer is set in the config to determine upload method.
+    case $arch in
+    avr )
+        uploadAvrProject $1
+        ;;
+    arm )
+        uploadArmProject
+        ;;
+    * )
+        echo default
+        ;;
+    esac
 }
 
 function updateLib() {
     checkForProject
 
+    # TODO pull nblib changes
     echo update
 }
 
 function openSerial() {
     port=$1
 
+    if [[ -z $port ]]; then port=$serial_port; fi
+
+    if [[ -z $port ]]; then port=$(findPort); fi
+
     if [[ -z $port ]]; then
-        # TODO Guess which port to use.
-        port="undefined"
+        echo "Error: Can't find serial port."
+        exit -1
     fi
 
-    echo "picocom $port"
-}
+    echo "-----------------------------------"
+    echo "Serial - Exit with ctrl+a -> ctrl+x"
+    echo "-----------------------------------"
 
-function showHelp() {
-    echo "$helpMessage"
+    if [[ -z $serial_baud ]]; then serial_baud=115200; fi
+
+    picocom --imap lfcrlf --omap crlf --baud $serial_baud $port
 }
 
 case $1 in
@@ -218,9 +280,6 @@ clean )
     ;;
 upload )
     uploadProject $2
-    ;;
-memory )
-    showMemoryUse
     ;;
 update )
     updateLib

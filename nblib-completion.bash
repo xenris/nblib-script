@@ -1,5 +1,5 @@
 #/usr/bin/env bash
 
-complete -W "version create build clean upload memory create serial update help --help" ./nblib
+complete -W "create build clean upload serial update help --help version" nblib
 # complete -A directory "./nblib create"
 # complete -A directory "./nblib serial"
