@@ -51,8 +51,6 @@ function createProject() {
     fi
 
     if [[ ! -e $1 || ! $(ls -A $1) ]]; then
-        # tempFile=`mktemp`
-
         mkdir -p $1
 
         cd $1
