@@ -66,8 +66,6 @@ function createProject() {
         mv nblib-project-template-master/* ./
         rmdir nblib-project-template-master
 
-        tup init
-
         git init
 
         rmdir lib/nblib/
@@ -124,6 +122,10 @@ function buildProject() {
     for p in $PATHS; do
         echo "SRC_FILES += $p" >> Tuprules.tmp
     done
+
+    if [[ ! -e .tup ]]; then
+        tup init
+    fi
 
     tup
 
