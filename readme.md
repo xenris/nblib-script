@@ -1,6 +1,6 @@
 # nblib-script
 
-Script for creating, compiling, and uploading nblib based projects.
+Script for creating, compiling, and uploading [nblib](https://github.com/xenris/nblib) based projects.
 
 ### Requirements
 
