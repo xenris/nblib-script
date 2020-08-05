@@ -195,7 +195,7 @@ function uploadAvrFirmware() {
         ;;
     esac
 
-    if [[ -n $upload_baud ]]; then upload_baud="-b $upload_baud"; fi
+    if [[ -z $upload_baud ]]; then upload_baud=115200; fi
 
     if [[ "$programmer" == "updi" ]]; then
         echo pyupdi.py -d $mmcu -c $port -b $upload_baud -f $hex
@@ -204,7 +204,7 @@ function uploadAvrFirmware() {
 
         if [[ -n $bitclock ]]; then bitclock="-B $bitclock"; fi
 
-        avrdude $bitclock $upload_baud -p $mmcu -P $port -c $programmer $disableAutoErase -U flash:w:$hex
+        avrdude $bitclock -b $upload_baud -p $mmcu -P $port -c $programmer $disableAutoErase -U flash:w:$hex
     fi
 }
 
