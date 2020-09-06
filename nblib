@@ -210,6 +210,8 @@ function uploadAvrFirmware() {
 
 function uploadArmFirmware() {
     # TODO Check if address needs to change in some cases.
+    bin="gen/firmware.bin"
+
     st-flash --reset write $bin 0x08000000
 }
 
