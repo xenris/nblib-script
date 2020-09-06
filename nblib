@@ -55,7 +55,14 @@ function createProject() {
 
         cd $1
 
-        curl -L https://github.com/xenris/nblib-project-template/archive/master.zip -o master.zip
+        if command -v curl &> /dev/null; then
+            curl -L https://github.com/xenris/nblib-project-template/archive/master.zip -o master.zip
+        elif command -v wget &> /dev/null; then
+            wget https://github.com/xenris/nblib-project-template/archive/master.zip
+        else
+            echo "Warning: couldn't find either 'curl' or 'wget' to download nblib template project."
+            echo "You can download it manually from: 'https://github.com/xenris/nblib-project-template/archive/master.zip'."
+        fi
 
         unzip -q master.zip
         rm master.zip
