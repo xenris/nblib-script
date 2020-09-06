@@ -107,7 +107,7 @@ function buildProject() {
         echo "-Ilib/$p/src/" >> .clang_complete
     done
 
-    PATHS=$(find src/ lib/*/src/ -name '*.c' -o -name '*.cpp' -o -name '*.S')
+    PATHS=$(find src/ lib/*/src/ -name '*.c' -o -name '*.cpp' -o -name '*.s')
 
     echo "arch = $arch" > Tuprules.tmp
     echo "mmcu = $mmcu" >> Tuprules.tmp
