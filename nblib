@@ -198,7 +198,7 @@ function uploadAvrFirmware() {
     if [[ -z $upload_baud ]]; then upload_baud=115200; fi
 
     if [[ "$programmer" == "updi" ]]; then
-        echo pyupdi.py -d $mmcu -c $port -b $upload_baud -f $hex
+        pyupdi.py -d ${mmcu:2} -c $port -b $upload_baud -f $hex
     else
         if [[ -n $disableAutoErase ]]; then disableAutoErase='-D'; fi
 
